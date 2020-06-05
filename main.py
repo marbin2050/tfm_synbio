@@ -152,6 +152,7 @@ def main():
     classification_results = predict_output_sequence(partitions_clf)
     show_classification_results(classification_results)
 
+
     # TODO: Include total time in tables and, perhaps, calculate time including also predict
     # TODO: Automatize the evaluation and the results for the classification problem
     # TODO: Join MLP and CNN

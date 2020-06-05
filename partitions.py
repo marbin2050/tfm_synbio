@@ -10,4 +10,5 @@ class Partitions:
 
     def create_data_partitions(self, x, y, test_size=0.2):
         # split in train and test data
-        self.x_train, self.x_test, self.y_train, self.y_test = train_test_split(x, y, test_size=test_size, random_state=0)
+        self.x_train, self.x_test, self.y_train, self.y_test = train_test_split(x, y, test_size=test_size,
+                                                                                random_state=0)
