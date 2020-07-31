@@ -4,21 +4,21 @@ import partitions
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.multiclass import OneVsRestClassifier
-from sklearn.svm import SVR, LinearSVC
+from sklearn.svm import LinearSVR, LinearSVC
 from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier
-from xgboost import XGBRegressor, XGBClassifier
+from xgboost import XGBRegressor, XGBClassifier, XGBRFRegressor
 import preprocessing
 import learning_model
 import pandas as pd
 from numpy import array
+import numpy as np
 from results import show_regression_results, show_classification_results
 
 # COMMAND LINE ARGUMENTS
-# data = "input_files/HT1_1.csv"
-data = "input_files/dataset_A.csv"
+data = "input_files/dataset_C_10_LINEAR_NOISE90_cells.csv"
 
 
-def predict_substitution_frequency(partitions_reg, sub_partitions_reg):
+def predict_substitution_frequency(partitions_reg):
 
     regression_results = {}
 
@@ -33,6 +33,12 @@ def predict_substitution_frequency(partitions_reg, sub_partitions_reg):
     mlr.run()
     regression_results['Linear Regression'] = mlr.results
 
+    # SVM
+    estimator = LinearSVR()
+    svmr = learning_model.Regressor(partitions_reg, estimator)
+    svmr.run()
+    regression_results['SVM'] = svmr.results
+
     # DECISION TREE
     estimator = DecisionTreeRegressor()
     dtr = learning_model.Regressor(partitions_reg, estimator)
@@ -40,27 +46,27 @@ def predict_substitution_frequency(partitions_reg, sub_partitions_reg):
     regression_results['Decision Tree'] = dtr.results
 
     # RANDOM FOREST
-    estimator = RandomForestRegressor(max_depth=2, random_state=0)
+    estimator = RandomForestRegressor()
     rfr = learning_model.Regressor(partitions_reg, estimator)
     rfr.run()
     regression_results['Random Forest'] = rfr.results
 
-    # SVM
-    estimator = SVR(C=1.0, epsilon=0.2)
-    svmr = learning_model.Regressor(sub_partitions_reg, estimator)
-    svmr.run()
-    regression_results['SVM'] = svmr.results
-
-    # XGBOOST
+    # XGBOOST (regression with squared loss)
     estimator = XGBRegressor()
     xgbr = learning_model.Regressor(partitions_reg, estimator)
     xgbr.run()
     regression_results['XGBoost'] = xgbr.results
 
+    # XGBOOST (random forest)
+    estimator = XGBRFRegressor()
+    xgbrf = learning_model.Regressor(partitions_reg, estimator)
+    xgbrf.run()
+    regression_results['XGBoostRF'] = xgbrf.results
+
     # MULTILAYER PERCEPTRON
     mlp = learning_model.MultilayerPerceptron(partitions_reg)
     mlp.run()
-    regression_results['Multilayer Perceptron'] = mlp.results
+    regression_results['M. Perceptron'] = mlp.results
 
     # CONVOLUTIONAL NEURAL NETWORK
     cnn = learning_model.ConvolutionalNeuralNetwork(partitions_reg)
@@ -77,7 +83,7 @@ def predict_output_sequence(partitions_clf):
     # DUMMY ALGORITHM PREDICTION
     dummy_clf = learning_model.DummyClassifier(partitions_clf)
     dummy_clf.run()
-    classification_results['Dummy Classification'] = dummy_clf.results
+    classification_results['Dummy'] = dummy_clf.results
 
     # DECISION TREE
     estimator = DecisionTreeClassifier()
@@ -95,7 +101,7 @@ def predict_output_sequence(partitions_clf):
     estimator = OneVsRestClassifier(LogisticRegression(max_iter=100000))
     lgc = learning_model.Classifier(partitions_clf, estimator)
     lgc.run()
-    classification_results['Logistic Regression'] = lgc.results
+    classification_results['Logistic'] = lgc.results
 
     # SVM
     estimator = OneVsRestClassifier(LinearSVC())
@@ -109,6 +115,11 @@ def predict_output_sequence(partitions_clf):
     xgbc.run()
     classification_results['XGBoost'] = xgbc.results
 
+    # MULTILAYER PERCEPTRON
+    mlp = learning_model.MultilayerPerceptron(partitions_clf)
+    mlp.run_classification()
+    classification_results['M. Perceptron'] = mlp.results
+
     # CONVOLUTIONAL NEURAL NETWORK
     cnn = learning_model.ConvolutionalNeuralNetwork(partitions_clf)
     cnn.run_classification()
@@ -121,43 +132,40 @@ def main():
 
     # STEP 0: GET DNA DATA
     df = pd.read_csv(data, header=0)
-    # df = df[:10000]
 
     # STEP 1: PREPARE INPUT AND OUTPUT DATA for REGRESSION AND CLASSIFICATION
     x = df.loc[:, 'gRNA']  # input values
     y_reg = df.loc[:, 'substitution_frequency']  # output values for regression
     y_reg = array(y_reg) * 100  # array type and scale to make it more interpretable
-    y_clf = df.loc[:, 'gRNA_edited']  # output values for classification
+    y_clf = df.loc[:, 'sub_seq_edited']  # output values for classification
 
-    # STEP 2: ONE-HOT ENCODING DNA DATA
-    x = preprocessing.one_hot_encoding(x)  # one-hot encoding the input values (x)
-    y_clf = preprocessing.binary_encoding(y_clf)  # one-hot encoding the output values
+    # STEP 2: ONE-HOT ENCODING DNA DATA (nucleotide A)
+    x1 = preprocessing.one_hot_encoding(x)  # one-hot encoding the input values (x)
+    x2 = df[['GC_content_norm', 'hybridization_norm', 'score_norm']].to_numpy()
+    x = np.concatenate((x1, x2), axis=1)
+    nucleotide = "T"
+    y_clf = preprocessing.binary_encoding(y_clf, nucleotide)  # encoding the output values for classification
 
     # STEP 3: SPLIT DATA INTO TRAIN, VALIDATION and TEST for REGRESSION
     partitions_reg = partitions.Partitions()
     partitions_reg.create_data_partitions(x, y_reg)
-    # smaller subset of data for the svm algorithm to speed up the training process
-    sub_partitions_reg = partitions.Partitions()
-    sub_partitions_reg.create_data_partitions(x, y_reg, 0.95)
 
-    # STEP 4: SPLIT DATA INTO TRAIN, VALIDATION and TEST for CLASSIFICATION
+    # # STEP 4: SPLIT DATA INTO TRAIN, VALIDATION and TEST for CLASSIFICATION
     partitions_clf = partitions.Partitions()
     partitions_clf.create_data_partitions(x, y_clf)
 
     # STEP 5: PREDICTING THE SUBSTITUTION FREQUENCY (REGRESSION PROBLEM)
-    regression_results = predict_substitution_frequency(partitions_reg, sub_partitions_reg)
-    show_regression_results(regression_results)
+    # regression_results = predict_substitution_frequency(partitions_reg)
+    # show_regression_results(regression_results)
 
-    # STEP 8: PREDICTING THE SEQUENCE OUTPUT (CLASSIFICATION PROBLEM)
+    # STEP 6: PREDICTING THE SEQUENCE OUTPUT (CLASSIFICATION PROBLEM: ABE)
     classification_results = predict_output_sequence(partitions_clf)
     show_classification_results(classification_results)
-
 
     # TODO: Include total time in tables and, perhaps, calculate time including also predict
     # TODO: Automatize the evaluation and the results for the classification problem
     # TODO: Join MLP and CNN
     # TODO: Check the logistic regression warnings
-    # TODO: Create subpartitions from partitions (method inside) for the SVM algorithm
     # TODO: Show a message at the beginning of each algorithm to help knowing where we are while executing
     # TODO: Introduce multi inputs
     # TODO: Add Learning and Validation curves.

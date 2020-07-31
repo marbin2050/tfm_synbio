@@ -1,11 +1,10 @@
-import evaluation
-
 __author__ = '{Alfonso Aguado Bustillo}'
 
 import numpy as np
 import tensorflow as tf
 import time
 import pandas as pd
+import evaluation
 
 
 class BaseModel:
@@ -71,7 +70,7 @@ class ConvolutionalNeuralNetwork:
 
     def build_regression_model(self):
         model = tf.keras.models.Sequential([
-            tf.keras.layers.Conv1D(256, 5, activation='relu', input_shape=(92, 1)),
+            tf.keras.layers.Conv1D(256, 5, activation='relu', input_shape=(95, 1)),
             tf.keras.layers.AveragePooling1D(2),
             tf.keras.layers.Flatten(),
             tf.keras.layers.Dropout(0.1),
@@ -83,7 +82,6 @@ class ConvolutionalNeuralNetwork:
             tf.keras.layers.Dropout(0.1),
             tf.keras.layers.Dense(1),
         ])
-
         optimizer = tf.keras.optimizers.RMSprop(learning_rate=0.001, rho=0.9)
 
         model.compile(loss='mse',
@@ -94,7 +92,7 @@ class ConvolutionalNeuralNetwork:
 
     def build_classification_model(self):
         model = tf.keras.models.Sequential([
-                    tf.keras.layers.Conv1D(64, 5, activation='relu', input_shape=(92, 1)),
+                    tf.keras.layers.Conv1D(64, 5, activation='relu', input_shape=(95, 1)),
                     tf.keras.layers.AveragePooling1D(2),
                     tf.keras.layers.Flatten(),
                     tf.keras.layers.Dropout(0.1),
@@ -107,8 +105,7 @@ class ConvolutionalNeuralNetwork:
         self.model = model
 
     def fit(self):
-        # EPOCHS = 1000
-        EPOCHS = 50
+        EPOCHS = 100
         # the patience parameter is the amount of epochs to check for improvement
         early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=10)
         self.model.fit(np.expand_dims(self.partitions.x_train, axis=2), self.partitions.y_train,
@@ -127,7 +124,7 @@ class MultilayerPerceptron:
         self.fitting_time = None
 
     def run(self):
-        self.build_neural_network()
+        self.build_regression_model()
         start = time.time()
         self.fit()
         end = time.time()
@@ -135,9 +132,22 @@ class MultilayerPerceptron:
         self.predict()
         self.results = evaluation.evaluate_regressor(self.partitions, self.prediction, self.fitting_time)
 
-    def build_neural_network(self):
+    def run_classification(self):
+        self.build_classification_model()
+        start = time.time()
+        self.fit()
+        end = time.time()
+        self.fitting_time = end - start
+        self.predict()
+        # get discrete values for prediction
+        self.prediction = np.where(self.prediction < 0.5, 0., 1.)  # only for classification
+        self.results = evaluation.evaluate_classifier(self.partitions, self.prediction, self.fitting_time)
+
+    def build_regression_model(self):
         model = tf.keras.models.Sequential([
-            tf.keras.layers.Dense(64, activation='relu', input_shape=[92]),
+            tf.keras.layers.Dense(64, activation='relu', input_shape=[95]),
+            tf.keras.layers.Dropout(0.5),
+            tf.keras.layers.Dense(64, activation='relu'),
             tf.keras.layers.Dropout(0.5),
             tf.keras.layers.Dense(64, activation='relu'),
             tf.keras.layers.Dropout(0.5),
@@ -150,8 +160,20 @@ class MultilayerPerceptron:
 
         self.model = model
 
+    def build_classification_model(self):
+        model = tf.keras.models.Sequential([
+            tf.keras.layers.Dense(64, activation='relu', input_shape=[95]),
+            tf.keras.layers.Dropout(0.5),
+            tf.keras.layers.Dense(32, activation='relu'),
+            tf.keras.layers.Dropout(0.5),
+            tf.keras.layers.Dense(23, activation='sigmoid')
+        ])
+        model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+
+        self.model = model
+
     def fit(self):
-        EPOCHS = 50
+        EPOCHS = 100
         # the patience parameter is the amount of epochs to check for improvement
         early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=10)
         self.model.fit(self.partitions.x_train, self.partitions.y_train,

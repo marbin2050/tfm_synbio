@@ -34,7 +34,7 @@ def one_hot_encoding(data):
     return data_encoded
 
 
-def binary_encoding(data, nucleotide="A"):
+def binary_encoding(data, nucleotide="T"):
 
     data_encoded = []
 
@@ -43,8 +43,8 @@ def binary_encoding(data, nucleotide="A"):
 
         binary = []
 
-        for nucleotide in nucleotides:
-            if nucleotide == 'A':
+        for element in nucleotides:
+            if element == nucleotide:
                 binary.append([1.])
             else:
                 binary.append([0.])
